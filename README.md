@@ -8,6 +8,7 @@ WebRTC IP 泄露检测工具，用于访问 Claude / 其他网站前自检浏览
 
 - HTTP 出口 IP 检测。
 - Cloudflare `request.cf` 信息展示。
+- STUN 连通性检测，展示 STUN 服务器、`srflx` 获取状态、ICE 错误和检测耗时。
 - WebRTC ICE candidate 检测。
 - `host` / `srflx` / `relay` / `prflx` 分类。
 - IPv4 / IPv6 / 私网 / 公网 / mDNS / relay 展示。

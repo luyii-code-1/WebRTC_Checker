@@ -417,6 +417,7 @@ function buildReport(httpInfo, rtcResult, options = {}) {
     .map(parseCandidate)
     .filter((candidate) => candidate.raw);
   const summary = summarizeCandidates(parsedCandidates, rtcResult);
+  const stun = buildStunCheck(parsedCandidates, rtcResult);
   const ipGroups = buildIpGroups(httpInfo, parsedCandidates);
   const risk = evaluateRisk(httpInfo, parsedCandidates);
 
@@ -434,6 +435,7 @@ function buildReport(httpInfo, rtcResult, options = {}) {
       elapsedMs: rtcResult && Number.isFinite(rtcResult.elapsedMs) ? rtcResult.elapsedMs : null,
       error: (rtcResult && rtcResult.error) || null,
       candidateErrors: (rtcResult && rtcResult.candidateErrors) || [],
+      stun,
       summary,
       ipGroups,
       candidates: parsedCandidates
@@ -444,6 +446,7 @@ function buildReport(httpInfo, rtcResult, options = {}) {
 
 function renderReport(report) {
   renderHttpInfo(report);
+  renderStunInfo(report);
   renderCandidateSummary(report);
   renderIpGroups(report.webrtc.ipGroups);
   renderRisk(report.risk);
@@ -521,6 +524,17 @@ function renderEmptyState() {
     ["TLS Version", null]
   ]);
 
+  renderKeyValueList($("stunInfo"), [
+    ["STUN 服务器", STUN_SERVERS.map((server) => server.urls).join(", ")],
+    ["STUN 检测状态", "未检测"],
+    ["是否获得 srflx", null],
+    ["srflx 公网出口数量", 0],
+    ["srflx 公网出口", null],
+    ["ICE 错误数量", 0],
+    ["检测耗时", null],
+    ["说明", "点击“开始检测”后执行 STUN 检测。"]
+  ]);
+
   renderKeyValueList($("candidateSummary"), [
     ["WebRTC 是否可用", null],
     ["总 candidate 数量", 0],
@@ -573,6 +587,20 @@ function renderHttpInfo(report) {
     ["HTTP Protocol", http.httpProtocol],
     ["TLS Version", http.tlsVersion],
     ["Timestamp", http.timestamp]
+  ]);
+}
+
+function renderStunInfo(report) {
+  const stun = report.webrtc.stun;
+  renderKeyValueList($("stunInfo"), [
+    ["STUN 服务器", stun.servers.join(", ")],
+    ["STUN 检测状态", stun.label],
+    ["是否获得 srflx", stun.hasSrflx ? "是" : "否"],
+    ["srflx 公网出口数量", stun.publicSrflxCount],
+    ["srflx 公网出口", stun.publicSrflxIps.length ? stun.publicSrflxIps.join(", ") : null],
+    ["ICE 错误数量", stun.errorCount],
+    ["检测耗时", stun.elapsedMs === null ? null : `${stun.elapsedMs} ms`],
+    ["说明", stun.description]
   ]);
 }
 
@@ -747,6 +775,96 @@ function buildIpGroups(httpInfo, candidates) {
     webrtcIPv6: uniqueCandidateItems(candidates.filter((candidate) => candidate.isIPv6)),
     mdns: uniqueCandidateItems(candidates.filter((candidate) => candidate.isMdns)),
     relay: uniqueCandidateItems(candidates.filter((candidate) => candidate.type === "relay"))
+  };
+}
+
+function buildStunCheck(candidates, rtcResult) {
+  const available = Boolean(rtcResult && rtcResult.available);
+  const errors = (rtcResult && rtcResult.candidateErrors) || [];
+  const srflxCandidates = candidates.filter((candidate) => candidate.type === "srflx");
+  const publicSrflxIps = uniqueStrings(
+    srflxCandidates
+      .filter((candidate) => candidate.isPublic)
+      .map((candidate) => candidate.address)
+  );
+  const elapsedMs = rtcResult && Number.isFinite(rtcResult.elapsedMs) ? rtcResult.elapsedMs : null;
+
+  if (!available) {
+    return {
+      status: "unsupported",
+      label: "WebRTC 不可用",
+      description: (rtcResult && rtcResult.error) || "当前浏览器不支持 RTCPeerConnection，无法执行 STUN 检测。",
+      servers: STUN_SERVERS.map((server) => server.urls),
+      hasSrflx: false,
+      srflxCount: 0,
+      publicSrflxCount: 0,
+      publicSrflxIps,
+      errorCount: errors.length,
+      errors,
+      elapsedMs
+    };
+  }
+
+  if (publicSrflxIps.length > 0) {
+    return {
+      status: "ok",
+      label: "STUN 可用，已获得 srflx",
+      description: "STUN 返回了 srflx candidate，说明浏览器可通过 WebRTC 看到一个或多个网络出口。",
+      servers: STUN_SERVERS.map((server) => server.urls),
+      hasSrflx: true,
+      srflxCount: srflxCandidates.length,
+      publicSrflxCount: publicSrflxIps.length,
+      publicSrflxIps,
+      errorCount: errors.length,
+      errors,
+      elapsedMs
+    };
+  }
+
+  if (srflxCandidates.length > 0) {
+    return {
+      status: "partial",
+      label: "STUN 有响应，但未识别公网 srflx",
+      description: "检测到了 srflx candidate，但地址未被识别为公网出口；可能受浏览器、网络策略或地址类型影响。",
+      servers: STUN_SERVERS.map((server) => server.urls),
+      hasSrflx: true,
+      srflxCount: srflxCandidates.length,
+      publicSrflxCount: 0,
+      publicSrflxIps,
+      errorCount: errors.length,
+      errors,
+      elapsedMs
+    };
+  }
+
+  if (errors.length > 0) {
+    return {
+      status: "error",
+      label: "STUN 可能不可达",
+      description: "WebRTC ICE 收集过程中出现错误，可能是 STUN 被网络、代理、VPN 或浏览器策略拦截。",
+      servers: STUN_SERVERS.map((server) => server.urls),
+      hasSrflx: false,
+      srflxCount: 0,
+      publicSrflxCount: 0,
+      publicSrflxIps,
+      errorCount: errors.length,
+      errors,
+      elapsedMs
+    };
+  }
+
+  return {
+    status: "no-srflx",
+    label: "未获得 srflx",
+    description: "未从 STUN 获得 srflx candidate；可能是浏览器隐私策略、VPN/代理限制 UDP，或当前网络未暴露可见的 STUN 出口。",
+    servers: STUN_SERVERS.map((server) => server.urls),
+    hasSrflx: false,
+    srflxCount: 0,
+    publicSrflxCount: 0,
+    publicSrflxIps,
+    errorCount: 0,
+    errors,
+    elapsedMs
   };
 }
 
