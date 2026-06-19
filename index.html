@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="referrer" content="no-referrer">
+    <title>WebRTC IP 泄露检测</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="app.js" defer></script>
+  </head>
+  <body>
+    <main class="page-shell">
+      <header class="hero">
+        <div>
+          <p class="eyebrow">WebRTC Network Exit Check</p>
+          <h1>WebRTC IP 泄露检测</h1>
+          <p class="lead">本工具用于检测浏览器 WebRTC 是否可能暴露非预期网络出口信息。</p>
+        </div>
+        <ul class="privacy-list" aria-label="工具说明">
+          <li>本工具不会访问 Claude。</li>
+          <li>本工具不会自动跳转。</li>
+          <li>本工具不会请求摄像头或麦克风权限。</li>
+          <li>默认不会保存检测结果。</li>
+        </ul>
+      </header>
+
+      <section class="control-card" aria-label="检测操作">
+        <div class="button-row">
+          <button id="startButton" type="button">开始检测</button>
+          <button id="resetButton" type="button" class="secondary" disabled>重新检测</button>
+          <button id="copyButton" type="button" class="secondary" disabled>复制 JSON 报告</button>
+        </div>
+        <div id="loadingBox" class="status loading" hidden>
+          <span class="spinner" aria-hidden="true"></span>
+          <span>检测中，正在获取 HTTP 出口信息并收集 WebRTC ICE candidates...</span>
+        </div>
+        <div id="errorMessage" class="status error" hidden></div>
+      </section>
+
+      <section class="grid">
+        <article class="card" aria-labelledby="http-title">
+          <div class="card-header">
+            <h2 id="http-title">HTTP 出口信息</h2>
+          </div>
+          <dl id="httpInfo" class="kv-grid"></dl>
+        </article>
+
+        <article class="card" aria-labelledby="summary-title">
+          <div class="card-header">
+            <h2 id="summary-title">WebRTC Candidate 汇总</h2>
+          </div>
+          <dl id="candidateSummary" class="kv-grid"></dl>
+        </article>
+      </section>
+
+      <section class="grid">
+        <article class="card" aria-labelledby="ip-title">
+          <div class="card-header">
+            <h2 id="ip-title">IP 信息</h2>
+          </div>
+          <div id="ipGroups" class="ip-groups"></div>
+        </article>
+
+        <article id="riskCard" class="card risk-card" aria-labelledby="risk-title">
+          <div class="card-header risk-header">
+            <h2 id="risk-title">风险等级</h2>
+            <span id="riskBadge" class="risk-badge">未检测</span>
+          </div>
+          <p id="riskDescription" class="muted">点击“开始检测”后生成风险说明。</p>
+          <h3>判断理由</h3>
+          <ul id="riskReasons" class="plain-list"></ul>
+          <h3>修复建议</h3>
+          <ul id="riskSuggestions" class="plain-list"></ul>
+        </article>
+      </section>
+
+      <details id="candidatesDetails" class="card detail-card">
+        <summary>原始 Candidates 折叠详情</summary>
+        <div id="candidateList" class="candidate-list"></div>
+      </details>
+
+      <details id="jsonDetails" class="card detail-card">
+        <summary>原始 JSON 报告</summary>
+        <pre id="jsonReport" class="json-block">{}</pre>
+      </details>
+
+      <footer class="footer-note">
+        WebRTC <code>srflx</code> IP 不一定等于真实家庭宽带 IP，只代表 STUN 看到的网络出口。检测结果受浏览器、VPN、代理、系统网络设置影响，仅供参考。
+      </footer>
+    </main>
+  </body>
+</html>
